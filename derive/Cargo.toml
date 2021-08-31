@@ -1,0 +1,19 @@
+[package]
+name = "bevy_spicy_data_derive"
+version = "0.1.0"
+edition = "2018"
+resolver = "2"
+license = "MIT OR Apache-2.0"
+
+[lib]
+proc-macro = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+heck = "0.3.3"
+proc-macro-error = "1.0.4"
+proc-macro2 = "1.0.29"
+quote = "1.0.9"
+syn = "1.0.75"
+toml = "0.5.8"

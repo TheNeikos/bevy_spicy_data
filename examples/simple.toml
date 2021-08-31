@@ -1,0 +1,8 @@
+[info]
+warning = true
+
+[another_table]
+bonjour = "oui"
+
+[some.deep.table]
+foo = true
