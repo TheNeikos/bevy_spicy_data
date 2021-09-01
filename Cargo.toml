@@ -14,3 +14,8 @@ members = ["derive"]
 [dependencies]
 bevy = { git = "https://github.com/bevyengine/bevy.git", default-features = false }
 bevy_spicy_data_derive = { path = "./derive/" }
+serde = { version = "1.0.130", features = ["derive"] }
+
+[dev-dependencies]
+toml = { version = "0.5.8" }
+bevy = { git = "https://github.com/bevyengine/bevy.git" }
