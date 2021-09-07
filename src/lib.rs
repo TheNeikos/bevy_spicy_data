@@ -91,8 +91,6 @@ impl<T: Config + Sync + Send + 'static> AssetLoader for TomlAssetLoader<T> {
         Box::pin(async move {
             let config: T = toml::from_slice(bytes)?;
 
-            println!("loading new toml config");
-
             config.register(load_context, None);
 
             Ok(())
