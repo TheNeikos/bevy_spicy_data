@@ -45,4 +45,3 @@ For example, if one were to load the whole file, the asset result would be `conf
 If one would just want the data in the `text` field, then one can load just the sub-path `"game.config#display.text"`.
 
 Check the "text" example on how this looks like in live.
-
