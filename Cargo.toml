@@ -12,9 +12,11 @@ license = "MIT OR Apache-2.0"
 members = ["derive"]
 
 [dependencies]
+anyhow = "1.0.43"
 bevy = { git = "https://github.com/bevyengine/bevy.git", default-features = false }
 bevy_spicy_data_derive = { path = "./derive/" }
 serde = { version = "1.0.130", features = ["derive"] }
+toml = "0.5.8"
 
 [dev-dependencies]
 toml = { version = "0.5.8" }

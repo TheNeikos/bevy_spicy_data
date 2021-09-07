@@ -1,7 +1,8 @@
-use bevy::{
-    diagnostic::{Diagnostics, FrameTimeDiagnosticsPlugin},
-    prelude::*,
-};
+use bevy::prelude::*;
+
+use bevy_spicy_data::data_config;
+
+data_config!(pub config, "assets/game.config");
 
 /// This example illustrates how to create UI text and update it in a system. It displays the
 /// current FPS in the top left corner, as well as text that changes colour in the bottom right.
@@ -9,31 +10,29 @@ use bevy::{
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugin(FrameTimeDiagnosticsPlugin::default())
+        .add_plugin(bevy_spicy_data::TomlConfigPlugin::<config::Root>::default())
         .add_startup_system(setup)
         .add_system(text_update_system)
-        .add_system(text_color_system)
         .run();
 }
-
-// A unit struct to help identify the FPS UI component, since there may be many Text components
-struct FpsText;
-
 // A unit struct to help identify the color-changing Text component
-struct ColorText;
+struct TomlText(Handle<config::display::Text>);
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
+    asset_server.watch_for_changes().unwrap();
+
+    let toml_asset_handle = asset_server.load("game.config#display some.text");
     // UI camera
     commands.spawn_bundle(UiCameraBundle::default());
     // Text with one section
     commands
         .spawn_bundle(TextBundle {
             style: Style {
-                align_self: AlignSelf::FlexEnd,
+                align_self: AlignSelf::Center,
                 position_type: PositionType::Absolute,
                 position: Rect {
-                    bottom: Val::Px(5.0),
-                    right: Val::Px(15.0),
+                    bottom: Val::Percent(0.5),
+                    right: Val::Percent(0.5),
                     ..Default::default()
                 },
                 ..Default::default()
@@ -43,7 +42,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
                 // Accepts a `String` or any type that converts into a `String`, such as `&str`
                 "hello\nbevy!",
                 TextStyle {
-                    font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                    font: asset_server.load("Share-Regular.ttf"),
                     font_size: 100.0,
                     color: Color::WHITE,
                 },
@@ -55,63 +54,20 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             ),
             ..Default::default()
         })
-        .insert(ColorText);
-    // Rich text with multiple sections
-    commands
-        .spawn_bundle(TextBundle {
-            style: Style {
-                align_self: AlignSelf::FlexEnd,
-                ..Default::default()
-            },
-            // Use `Text` directly
-            text: Text {
-                // Construct a `Vec` of `TextSection`s
-                sections: vec![
-                    TextSection {
-                        value: "FPS: ".to_string(),
-                        style: TextStyle {
-                            font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-                            font_size: 60.0,
-                            color: Color::WHITE,
-                        },
-                    },
-                    TextSection {
-                        value: "".to_string(),
-                        style: TextStyle {
-                            font: asset_server.load("fonts/FiraMono-Medium.ttf"),
-                            font_size: 60.0,
-                            color: Color::GOLD,
-                        },
-                    },
-                ],
-                ..Default::default()
-            },
-            ..Default::default()
-        })
-        .insert(FpsText);
+        .insert(TomlText(toml_asset_handle));
 }
 
-fn text_update_system(diagnostics: Res<Diagnostics>, mut query: Query<&mut Text, With<FpsText>>) {
-    for mut text in query.iter_mut() {
-        if let Some(fps) = diagnostics.get(FrameTimeDiagnosticsPlugin::FPS) {
-            if let Some(average) = fps.average() {
-                // Update the value of the second section
-                text.sections[1].value = format!("{:.2}", average);
+fn text_update_system(
+    mut toml_text_events: EventReader<AssetEvent<config::display::Text>>,
+    toml_text_assets: Res<Assets<config::display::Text>>,
+    mut query: Query<(&mut Text, &TomlText)>,
+) {
+    for _event in toml_text_events.iter() {
+        info!("New event: {:?}", _event);
+        for (mut text, toml_text) in query.iter_mut() {
+            if let Some(toml_text) = toml_text_assets.get(&toml_text.0) {
+                text.sections[0].value = toml_text.0.clone();
             }
         }
-    }
-}
-
-fn text_color_system(time: Res<Time>, mut query: Query<&mut Text, With<ColorText>>) {
-    for mut text in query.iter_mut() {
-        let seconds = time.seconds_since_startup() as f32;
-        // We used the `Text::with_section` helper method, but it is still just a `Text`,
-        // so to update it, we are still updating the one and only section
-        text.sections[0].style.color = Color::Rgba {
-            red: (1.25 * seconds).sin() / 2.0 + 0.5,
-            green: (0.75 * seconds).sin() / 2.0 + 0.5,
-            blue: (0.50 * seconds).sin() / 2.0 + 0.5,
-            alpha: 1.0,
-        };
     }
 }

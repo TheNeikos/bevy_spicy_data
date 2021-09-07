@@ -3,7 +3,7 @@ use proc_macro::TokenStream as TStream;
 use proc_macro2::TokenStream;
 use proc_macro_error::proc_macro_error;
 use quote::{format_ident, quote, ToTokens};
-use syn::{parse::Parse, parse_macro_input, Ident, LitStr, Token, Visibility};
+use syn::{Ident, LitStr, Token, Visibility, parse::Parse, parse_macro_input};
 
 struct DataConfigDeclaration {
     vis: Visibility,
@@ -113,12 +113,51 @@ fn generate_modules(toml_config: toml::Value) -> TokenStream {
                 }
             });
 
+            let uuid = uuid::Uuid::new_v4().as_bytes().to_vec();
+
+            let type_register = toml_types.iter().map(|ty| {
+                let TomlType { name, definition: TomlTypeDefinition { name: ty_name, typ: _ }, builder: _ } = ty;
+
+                let field_name = format_ident!("{}", name.to_snake_case());
+                quote! {
+                    <#ty_name as ::bevy_spicy_data::Config>::register(&self.#field_name, load_context, Some(vec![String::from(#name)]));
+                }                
+            });
+
+            let child_assets = toml_types.iter().map(|ty| {
+                let TomlType { name: _, definition: TomlTypeDefinition { name: ty_name, typ: _ }, builder: _ } = ty;
+
+                quote! {
+                    <#ty_name as ::bevy_spicy_data::Config>::add_asset(app);
+                }                
+            });
+
             quote! {
                 #(#types)*
 
                 #[derive(::bevy_spicy_data::private::serde::Deserialize, Debug, Clone, PartialEq)]
                 pub struct Root {
                     #(#complete_struct),*
+                }
+
+                impl ::bevy_spicy_data::Config for Root {
+                    fn register<'a>(&self, load_context: &'a mut ::bevy_spicy_data::private::LoadContext, _path: Option<Vec<String>>) {
+                        load_context.set_default_asset(::bevy_spicy_data::private::LoadedAsset::new(<Root as Clone>::clone(self)));
+
+                        #(#type_register)*
+                    }
+
+                    fn add_asset(app: &mut ::bevy_spicy_data::private::App) {
+                        use ::bevy_spicy_data::private::AddAsset;
+
+                        app.add_asset::<Self>();
+
+                        #(#child_assets)*
+                    }
+                }
+
+                impl ::bevy_spicy_data::private::TypeUuid for Root {
+                    const TYPE_UUID: ::bevy_spicy_data::private::Uuid = ::bevy_spicy_data::private::Uuid::from_bytes([#(#uuid),*]);
                 }
             }
         }
@@ -132,18 +171,53 @@ fn generate_modules(toml_config: toml::Value) -> TokenStream {
     }
 }
 
+fn make_builder(ty_name: &Ident, children: Option<(Vec<TokenStream>, Vec<TokenStream>)>) -> TokenStream {
+    let uuid = uuid::Uuid::new_v4().as_bytes().to_vec();
+    let (register, add_asset) = if let Some((register, add_asset)) = children {
+        (register, add_asset)
+    } else {
+        (vec![], vec![])
+    };
+
+    quote! {
+        impl ::bevy_spicy_data::Config for #ty_name {
+            fn register<'a>(&self, load_context: &'a mut ::bevy_spicy_data::private::LoadContext, path: Option<Vec<String>>) {
+                let asset_path = path.as_ref().unwrap().join(".");
+                load_context.set_labeled_asset(&asset_path, ::bevy_spicy_data::private::LoadedAsset::new(<Self as Clone>::clone(self)));
+
+                #(#register)*
+            }
+
+
+            fn add_asset(app: &mut ::bevy_spicy_data::private::App) {
+                use ::bevy_spicy_data::private::AddAsset;
+                
+                app.add_asset::<Self>();
+
+                #(#add_asset)*
+            }
+        }
+
+        impl ::bevy_spicy_data::private::TypeUuid for #ty_name {
+            const TYPE_UUID: ::bevy_spicy_data::private::Uuid = ::bevy_spicy_data::private::Uuid::from_bytes([#(#uuid),*]);
+        }
+    }
+}
+
 fn generate_type(name: String, toml_config: toml::Value) -> TomlType {
+
+
     match toml_config {
         toml::Value::String(_) => {
             let ident = format_ident!("{}", name.to_camel_case());
 
             TomlType {
                 name,
+                builder: make_builder(&ident, None),
                 definition: TomlTypeDefinition {
                     name: ident,
                     typ: quote! {(pub String);},
                 },
-                builder: quote! {},
             }
         }
         toml::Value::Integer(_) => {
@@ -151,11 +225,11 @@ fn generate_type(name: String, toml_config: toml::Value) -> TomlType {
 
             TomlType {
                 name,
+                builder: make_builder(&ident, None),
                 definition: TomlTypeDefinition {
                     name: ident,
                     typ: quote! {(pub u64);},
                 },
-                builder: quote! {},
             }
         }
         toml::Value::Float(_) => {
@@ -163,11 +237,11 @@ fn generate_type(name: String, toml_config: toml::Value) -> TomlType {
 
             TomlType {
                 name,
+                builder: make_builder(&ident, None),
                 definition: TomlTypeDefinition {
                     name: ident,
                     typ: quote! {(pub f64);},
                 },
-                builder: quote! {},
             }
         }
         toml::Value::Boolean(_) => {
@@ -175,11 +249,11 @@ fn generate_type(name: String, toml_config: toml::Value) -> TomlType {
 
             TomlType {
                 name,
+                builder: make_builder(&ident, None),
                 definition: TomlTypeDefinition {
                     name: ident,
                     typ: quote! {(pub bool);},
                 },
-                builder: quote! {},
             }
         }
         toml::Value::Datetime(_) => {
@@ -187,11 +261,11 @@ fn generate_type(name: String, toml_config: toml::Value) -> TomlType {
 
             TomlType {
                 name,
+                builder: make_builder(&ident, None),
                 definition: TomlTypeDefinition {
                     name: ident,
                     typ: quote! {(pub ::bevy_spicy_data::private::toml::Date);},
                 },
-                builder: quote! {},
             }
         }
         toml::Value::Array(_) => {
@@ -235,6 +309,25 @@ fn generate_type(name: String, toml_config: toml::Value) -> TomlType {
             });
 
             let ty_ident = format_ident!("{}", name.to_camel_case());
+            let config_builder = make_builder(&ty_ident, Some((toml_types.iter().map(|ty| {
+                let TomlType { name: child_name, definition: TomlTypeDefinition { name: ty_name, typ: _ }, builder: _ } = ty;
+
+                let field_name = format_ident!("{}", child_name.to_snake_case());
+                quote! {
+                    <#mod_ident::#ty_name as ::bevy_spicy_data::Config>::register(&self.#field_name, load_context, Some({
+                        let mut path: Vec<String> = path.as_ref().unwrap().clone();
+                        path.push(String::from(#child_name));
+                        path
+                    }));
+                }
+            }).collect(),toml_types.iter().map(|ty| {
+                let TomlType { name: _child_name, definition: TomlTypeDefinition { name: ty_name, typ: _ }, builder: _ } = ty;
+
+                quote! {
+                    <#mod_ident::#ty_name as ::bevy_spicy_data::Config>::add_asset(app);
+                }
+            }).collect(),
+            )));
             TomlType {
                 name,
                 definition: TomlTypeDefinition {
@@ -244,6 +337,8 @@ fn generate_type(name: String, toml_config: toml::Value) -> TomlType {
                     }},
                 },
                 builder: quote! {
+                    #config_builder
+
                     pub mod #mod_ident {
                         #(#types)*
                     }
