@@ -162,12 +162,16 @@ impl<T: Config + AsRef<str>> UiDataText<T> {
     #[doc(hidden)]
     pub fn when_inserted(
         text_assets: Res<Assets<T>>,
-        mut text_query: Query<(&UiDataText<T>, &mut Text), Changed<UiDataText<T>>>,
+        mut text_query: Query<
+            (&UiDataText<T>, &mut Text),
+            Or<(Added<UiDataText<T>>, Changed<UiDataText<T>>)>,
+        >,
     ) {
         for (ui_data_text, mut text) in text_query.iter_mut() {
             let config_text = if let Some(conf) = text_assets.get(&ui_data_text.0) {
                 conf.as_ref()
             } else {
+                debug!("Could not find text for: {} ({:?})", std::any::type_name::<T>(), ui_data_text.0);
                 continue;
             };
 

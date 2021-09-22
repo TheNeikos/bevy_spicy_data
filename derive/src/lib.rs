@@ -185,7 +185,9 @@ fn make_builder(ty_name: &Ident, children: Option<(Vec<TokenStream>, Vec<TokenSt
         impl ::bevy_spicy_data::Config for #ty_name {
             fn register<'a>(&self, load_context: &'a mut ::bevy_spicy_data::private::LoadContext, path: Option<Vec<String>>) {
                 let asset_path = path.as_ref().unwrap().join(".");
-                load_context.set_labeled_asset(&asset_path, ::bevy_spicy_data::private::LoadedAsset::new(<Self as Clone>::clone(self)));
+                let handle = load_context.set_labeled_asset(&asset_path, ::bevy_spicy_data::private::LoadedAsset::new(<Self as Clone>::clone(self)));
+
+                ::std::mem::forget(handle);
 
                 #(#register)*
             }
