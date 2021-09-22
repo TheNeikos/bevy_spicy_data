@@ -171,13 +171,15 @@ fn generate_modules(toml_config: toml::Value) -> TokenStream {
     }
 }
 
-fn make_builder(ty_name: &Ident, children: Option<(Vec<TokenStream>, Vec<TokenStream>)>) -> TokenStream {
+fn make_builder(ty_name: &Ident, children: Option<(Vec<TokenStream>, Vec<TokenStream>)>, custom_add_asset: Option<TokenStream>) -> TokenStream {
     let uuid = uuid::Uuid::new_v4().as_bytes().to_vec();
     let (register, add_asset) = if let Some((register, add_asset)) = children {
         (register, add_asset)
     } else {
         (vec![], vec![])
     };
+
+    let custom_add_asset = custom_add_asset.unwrap_or_default();
 
     quote! {
         impl ::bevy_spicy_data::Config for #ty_name {
@@ -195,6 +197,8 @@ fn make_builder(ty_name: &Ident, children: Option<(Vec<TokenStream>, Vec<TokenSt
                 app.add_asset::<Self>();
 
                 #(#add_asset)*
+
+                #custom_add_asset
             }
         }
 
@@ -211,9 +215,22 @@ fn generate_type(name: String, toml_config: toml::Value) -> TomlType {
         toml::Value::String(_) => {
             let ident = format_ident!("{}", name.to_camel_case());
 
+            let builder = make_builder(&ident, None, Some(quote! {
+                app.add_system_to_stage(::bevy_spicy_data::SyncStage, ::bevy_spicy_data::UiDataText::<Self>::when_inserted);
+                app.add_system_to_stage(::bevy_spicy_data::SyncStage, ::bevy_spicy_data::UiDataText::<Self>::keep_in_sync);
+            }));
+
             TomlType {
                 name,
-                builder: make_builder(&ident, None),
+                builder: quote! {
+                    #builder
+
+                    impl ::std::convert::AsRef<str> for #ident {
+                        fn as_ref(&self) -> &str {
+                            &self.0
+                        }
+                    }
+                },
                 definition: TomlTypeDefinition {
                     name: ident,
                     typ: quote! {(pub String);},
@@ -225,7 +242,7 @@ fn generate_type(name: String, toml_config: toml::Value) -> TomlType {
 
             TomlType {
                 name,
-                builder: make_builder(&ident, None),
+                builder: make_builder(&ident, None, None),
                 definition: TomlTypeDefinition {
                     name: ident,
                     typ: quote! {(pub u64);},
@@ -237,7 +254,7 @@ fn generate_type(name: String, toml_config: toml::Value) -> TomlType {
 
             TomlType {
                 name,
-                builder: make_builder(&ident, None),
+                builder: make_builder(&ident, None, None),
                 definition: TomlTypeDefinition {
                     name: ident,
                     typ: quote! {(pub f64);},
@@ -249,7 +266,7 @@ fn generate_type(name: String, toml_config: toml::Value) -> TomlType {
 
             TomlType {
                 name,
-                builder: make_builder(&ident, None),
+                builder: make_builder(&ident, None, None),
                 definition: TomlTypeDefinition {
                     name: ident,
                     typ: quote! {(pub bool);},
@@ -261,7 +278,7 @@ fn generate_type(name: String, toml_config: toml::Value) -> TomlType {
 
             TomlType {
                 name,
-                builder: make_builder(&ident, None),
+                builder: make_builder(&ident, None, None),
                 definition: TomlTypeDefinition {
                     name: ident,
                     typ: quote! {(pub ::bevy_spicy_data::private::toml::Date);},
@@ -327,7 +344,7 @@ fn generate_type(name: String, toml_config: toml::Value) -> TomlType {
                     <#mod_ident::#ty_name as ::bevy_spicy_data::Config>::add_asset(app);
                 }
             }).collect(),
-            )));
+            )), None);
             TomlType {
                 name,
                 definition: TomlTypeDefinition {

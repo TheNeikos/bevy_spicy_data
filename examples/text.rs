@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use bevy_spicy_data::data_config;
+use bevy_spicy_data::{UiDataText, data_config};
 
 data_config!(pub config, "assets/game.config");
 
@@ -22,6 +22,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     asset_server.watch_for_changes().unwrap();
 
     let toml_asset_handle = asset_server.load("game.config#display some.text");
+    let text_handle = asset_server.load("game.config#system.debug");
     // UI camera
     commands.spawn_bundle(UiCameraBundle::default());
     // Text with one section
@@ -55,6 +56,37 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             ..Default::default()
         })
         .insert(TomlText(toml_asset_handle));
+
+    commands
+        .spawn_bundle(TextBundle {
+            style: Style {
+                align_self: AlignSelf::Center,
+                position_type: PositionType::Absolute,
+                position: Rect {
+                    bottom: Val::Percent(0.5),
+                    left: Val::Percent(0.5),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            // Use the `Text::with_section` constructor
+            text: Text::with_section(
+                // Accepts a `String` or any type that converts into a `String`, such as `&str`
+                "{placeholder}",
+                TextStyle {
+                    font: asset_server.load("Share-Regular.ttf"),
+                    font_size: 100.0,
+                    color: Color::MIDNIGHT_BLUE,
+                },
+                // Note: You can use `Default::default()` in place of the `TextAlignment`
+                TextAlignment {
+                    horizontal: HorizontalAlign::Center,
+                    ..Default::default()
+                },
+            ),
+            ..Default::default()
+        })
+        .insert(UiDataText::<config::system::Debug>(text_handle));
 }
 
 fn text_update_system(
